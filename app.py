@@ -23,45 +23,35 @@ app = Flask(__name__)
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    # Load image or placeholder
-    image = get_image(request)
-
     # If it"s a GET, just return the form
     if request.method == "GET":
-        return render_template("index.html", image_uri=image.uri)
+        # Display default page
+        return render_template("index.html", image_uri="/static/placeholder.png")
 
-    # Create a placeholder for messages
-    messages = []
+    # Read the file from the form
+    image = request.files["file"]
 
-    # TODO: Add code to retrieve text from picture
-    messages = extract_text_from_image(image.blob, vision_client)
+    # Retrieve text from picture
+    messages = extract_text_from_image(image, vision_client)
 
-    return render_template("index.html", image_uri=image.uri, messages=messages)
+    # Reset stream back to the beginning
+    image.seek(0)
 
-def get_image(request):
-    # Helper class 
-    from image import Image
-    if request.files:
-        return Image(request.files["file"])
-    else:
-        return Image()
+    # Create a uri to display image on form
+    image_uri = "data:;base64," + base64.b64encode(image.read()).decode("utf-8")
+
+    # Display result
+    return render_template("index.html", image_uri=image_uri, messages=messages)
 
 def extract_text_from_image(image, client):
-    try:
-        result = client.recognize_printed_text_in_stream(image=image)
+    result = client.recognize_printed_text_in_stream(image=image)
 
-        lines=[]
-        if len(result.regions) == 0:
-            lines.append("Photo contains no text")
-        else:
+    lines=[]
+    if len(result.regions) == 0:
+        lines.append("Photo contains no text")
+    else:
+        for region in result.regions:
             for line in result.regions[0].lines:
                 text = " ".join([word.text for word in line.words])
                 lines.append(text)
-        return lines
-    except ComputerVisionErrorException as e:
-        print(e)
-        return ["Computer Vision API error: " + e.message]
-
-    except Exception as e:
-        print(e)
-        return ["Error calling the Computer Vision API"]
+    return lines
